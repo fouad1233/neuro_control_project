@@ -10,7 +10,6 @@ cmake_install.cmake
 *.out
 
 # Generated simulation output files
-tracking_plot.png
 extracted_pdf.txt
 
 # IDE / Editor folders
