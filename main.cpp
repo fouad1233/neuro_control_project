@@ -1,6 +1,7 @@
 #include <iostream>
 #include <vector>
 #include <cmath>
+#include <Eigen/Dense>
 #include "matplotlibcpp.h"
 
 namespace plt = matplotlibcpp;
@@ -31,17 +32,25 @@ public:
 
 class AdaptiveModController : public Controller {
 private:
-    double M_hat, C_hat, D_hat; // Estimated parameters
-    double gamma_M, gamma_C, gamma_D; // Adaptation gains
-    double K, alpha; // Control gains
+    Eigen::Vector3d theta_hat; // Estimated parameters vector: [M_hat, C_hat, D_hat]^T
+    Eigen::Matrix3d Gamma;     // Adaptation gain matrix [gamma_M, gamma_C, gamma_D]
+    double K, alpha;           // Control gains
     
     // Storing temporary states for the update_parameters step
-    double current_r, current_Y_M, current_Y_C, current_Y_D;
+    double current_r;
+    Eigen::RowVector3d current_Y; // Regression row vector Y = [x_r_ddot, x_r_dot, 1] for the current time step
 
 public:
     AdaptiveModController(double M0, double C0, double D0) 
-        : M_hat(M0), C_hat(C0), D_hat(D0), K(10.0), alpha(5.0), 
-          gamma_M(2.0), gamma_C(2.0), gamma_D(2.0) {}
+        : K(10.0), alpha(5.0) {
+        
+        // Initialize parameter vector
+        theta_hat << M0, C0, D0;
+        
+        // Initialize diagonal adaptation gain matrix
+        Gamma = Eigen::Matrix3d::Zero();
+        Gamma.diagonal() << 2.0, 2.0, 2.0;  // Gains for M, C, D respectively
+    }
 
     double get_control(double x, double x_dot, double x_d, double x_d_dot, double x_d_ddot) override {
         double e = x_d - x;
@@ -52,21 +61,17 @@ public:
         double x_r_dot = x_d_dot + alpha * e;
         double x_r_ddot = x_d_ddot + alpha * e_dot;
         
-        // Regression variables (Y)
-        current_Y_M = x_r_ddot;
-        current_Y_C = x_r_dot;
-        current_Y_D = 1.0;
+        // Regression vector (Y)
+        current_Y << x_r_ddot, x_r_dot, 1.0;
         
-        // Control Law: u = Y * theta_hat + K * r
-        double u = (current_Y_M * M_hat) + (current_Y_C * C_hat) + (current_Y_D * D_hat) + (K * current_r);
+        // Control Law (Vectorized): u = Y * theta_hat + K * r
+        double u = (current_Y * theta_hat).value() + (K * current_r);
         return u;
     }
 
     void update_parameters(double dt) override {
-        // Modular Update Law: Gradient Descent (theta_dot = Gamma * Y^T * r)
-        M_hat += (gamma_M * current_Y_M * current_r) * dt;
-        C_hat += (gamma_C * current_Y_C * current_r) * dt;
-        D_hat += (gamma_D * current_Y_D * current_r) * dt;
+        // Modular Update Law Vectorized: theta_dot = Gamma * Y^T * r
+        theta_hat += Gamma * current_Y.transpose() * current_r * dt;
     }
 };
 

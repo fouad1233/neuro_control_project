@@ -11,17 +11,21 @@ set(Python3_EXECUTABLE "/Library/Frameworks/Python.framework/Versions/3.12/bin/p
 # Find Python3 and NumPy automatically
 find_package(Python3 COMPONENTS Development NumPy REQUIRED)
 
+# Find Eigen3 automatically
+find_package(Eigen3 REQUIRED)
+
 # Create the executable
 add_executable(neuro_sim main.cpp)
 
 # Disable the noisy Python 3.12 deprecation warnings
 target_compile_options(neuro_sim PRIVATE -Wno-deprecated-declarations)
 
-# Link the Python and NumPy include directories
+# Link the Python, NumPy, and Eigen directories
 target_include_directories(neuro_sim PRIVATE 
     ${Python3_INCLUDE_DIRS} 
     ${Python3_NumPy_INCLUDE_DIRS}
+    Eigen3::Eigen
 )
 
 # Link the Python libraries
-target_link_libraries(neuro_sim PRIVATE ${Python3_LIBRARIES})
+target_link_libraries(neuro_sim PRIVATE ${Python3_LIBRARIES} Eigen3::Eigen)

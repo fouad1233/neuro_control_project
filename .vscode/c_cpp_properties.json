@@ -6,7 +6,8 @@
                 "${workspaceFolder}/**",
                 "/Library/Frameworks/Python.framework/Versions/3.12/Headers",
                 "/System/Library/Frameworks/Python.framework/Headers",
-                "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/numpy/_core/include"
+                "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/numpy/_core/include",
+                "/opt/homebrew/include/eigen3"
             ],
             "defines": [],
             "macFrameworkPath": [
