@@ -1,0 +1,20 @@
+# Build directories and CMake generated files
+build/
+CMakeCache.txt
+CMakeFiles/
+Makefile
+cmake_install.cmake
+
+# Compiled Executables and build objects
+*.o
+*.out
+
+# Generated simulation output files
+tracking_plot.png
+extracted_pdf.txt
+
+# IDE / Editor folders
+.vscode/
+
+# macOS system files
+.DS_Store
