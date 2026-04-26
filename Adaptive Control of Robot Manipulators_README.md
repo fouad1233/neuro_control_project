@@ -1,3 +1,4 @@
+
 # Adaptive Control of Robot Manipulators
 
 This project implements an Object-Oriented C++ simulation of a 1-DOF robotic system ($M\ddot{x} + C\dot{x} + D = u$) using a modular adaptive control law. It is inspired by the modularity concepts discussed in the paper *"Adaptive control of robot manipulators with controller/update law modularity"* by de Queiroz et al.
@@ -12,13 +13,32 @@ To build and run this project, you need the following dependencies installed on 
 2. **CMake**: Version 3.14 or higher.
 3. **Python 3**: Python 3.x along with its development headers.
 4. **Python Packages**: `numpy` and `matplotlib` for rendering the simulation graphics.
+5. **C++ Libraries**: `Eigen3` for linear algebra, matrix, and vector calculations.
 
 ### Installing Dependencies
+
+#### 1. C++ Libraries (macOS / Linux)
+
+You can easily install the required C++ linear algebra library (`Eigen`) using Homebrew:
+
+```bash
+brew install eigen
+```
+
+#### 2. Python Libraries
 
 If you haven't already, you can install the required Python libraries using `pip`:
 
 ```bash
 python3 -m pip install numpy matplotlib
+```
+
+#### 3. Matplotlib-CPP Header
+
+Since `matplotlibcpp.h` is a single-header library that bridges C++ to Python, you need to download it directly into the inner project folder. You can download the raw header file using `curl`:
+
+```bash
+curl -O https://raw.githubusercontent.com/lava/matplotlib-cpp/master/matplotlibcpp.h
 ```
 
 **Note for macOS:** CMake attempts to find your Python installation automatically. If you have multiple versions of Python installed (like macOS default Python vs. Homebrew Python), CMake might get confused. If `cmake ..` fails to find NumPy, open `CMakeLists.txt` and update the `Python3_EXECUTABLE` path to point directly to the python interpreter where you installed `numpy` (`which python3`).

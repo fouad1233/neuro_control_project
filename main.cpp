@@ -66,7 +66,7 @@ public:
         
         // Control Law (Vectorized): u = Y * theta_hat + K * r
         double u = (current_Y * theta_hat).value() + (K * current_r);
-        return u;
+        return u; // u is the control input to the plant, and it is a scalar
     }
 
     void update_parameters(double dt) override {
