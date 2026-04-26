@@ -33,7 +33,7 @@ public:
 class AdaptiveModController : public Controller {
 private:
     Eigen::Vector3d theta_hat; // Estimated parameters vector: [M_hat, C_hat, D_hat]^T
-    Eigen::Matrix3d Gamma;     // Adaptation gain matrix [gamma_M, gamma_C, gamma_D]
+    Eigen::Matrix3d Gamma;     // Adaptation gain matrix [gamma_M,0,0; 0, gamma_C, 0; 0, 0, gamma_D]
     double K, alpha;           // Control gains
     
     // Storing temporary states for the update_parameters step
