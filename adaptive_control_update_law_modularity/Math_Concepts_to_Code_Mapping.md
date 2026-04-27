@@ -81,35 +81,61 @@ The `1.0` serves as the placeholder to multiply against the gravity/disturbance 
 
 ---
 
-## 4. The Control Law
+## 4. The Robust Modular Control Law (Equation 12)
 
 ### The Theory
-The total control signal $u$ sent to the robot is the sum of the adaptive feedforward term (the robot's believed dynamics) and a proportional feedback term to pull $r$ to zero:
-$$ u = Y \hat{\theta} + K r $$
+Instead of the standard classic tracking law ($u = Y\hat{\theta} + Kr$), this implementation uses the **Robust Modular Control Law** from Equation 12. This advanced equation mathematically decouples the control law from the parameter update law, allowing for safer, faster parameter tuning while injecting "nonlinear damping" to prevent instability during aggressive learning.
+
+The formula from the literature is:
+$$ \tau = Kr + Y_s\hat{\theta} + \left[\frac{1}{\beta}Y_f\dot{\hat{\theta}}\right] + [(\dot{\hat{M}} - \hat{V}_m)r] + k_n\|Y_s\|^2 r + k_n\left\|\frac{1}{\beta}Y_f\dot{\hat{\theta}}\right\|^2 r + k_n\|(\dot{\hat{M}}-\hat{V}_m)r\|^2 r $$
+
+Because this is a 1D system, $\hat{V}_m = 0$. The equation breaks down as:
+1. **$Kr$**: Baseline proportional/derivative feedback.
+2. **$Y_s\hat{\theta}$**: Baseline adaptive feedforward.
+3. **$\frac{1}{\beta}Y_f\dot{\hat{\theta}}$**: Filtered modularity compensator (uses a low-pass filtered regressor $Y_f$).
+4. **$\dot{\hat{M}}r$**: Kinetic energy compensator (counters wildly fluctuating mass estimates).
+5. **$k_n \| \cdot \|^2 r$ terms**: "Nonlinear damping" terms. These mathematically act as brakes. If the norm (magnitude) of the regressors or adaptations gets too large, these square-law terms dominate the control signal to forcefully stabilize the robot.
 
 ### The Code
-Thanks to the Eigen library, the C++ code performs this matrix multiplication cleanly on one line:
+The C++ code explicitly calculates $\dot{\hat{\theta}}$ first, then splits Equation 12 into discrete terms for clarity:
 ```cpp
-// Control Law (Vectorized): u = Y * theta_hat + K * r
-double u = (current_Y * theta_hat).value() + (K * current_r);
+// Compute current theta_dot (from baseline update law)
+Eigen::Vector3d theta_dot = Gamma * current_Y.transpose() * current_r;
+double M_hat_dot = theta_dot(0); // V_m_hat is 0 in 1D
+
+// Equation 12: Robust Modular Control Law
+double term1 = K * current_r;                                             // Kr
+double term2 = (current_Y * theta_hat).value();                           // Y_s * theta_hat
+double term3 = (1.0 / beta) * (Y_f * theta_dot).value();                  // Filtered update force
+double term4 = M_hat_dot * current_r;                                     // (M_hat_dot - V_m_hat)*r
+double term5 = k_n * current_Y.squaredNorm() * current_r;                 // k_n * ||Y_s||^2 * r
+double term6 = k_n * std::pow(term3, 2) * current_r;                      // k_n * ||1/beta * Y_f * theta_dot||^2 * r
+double term7 = k_n * std::pow(M_hat_dot * current_r, 2) * current_r;      // k_n * ||(M_hat_dot)*r||^2 * r
+
+double u = term1 + term2 + term3 + term4 + term5 + term6 + term7;
 ```
 
 ---
 
-## 5. The Adaptation (Update) Law
+## 5. The Adaptation Law and Regressor Filter
 
 ### The Theory
-How does the controller learn the unknown mass, friction, and gravity? By gradient descent on the error! The update law defines how the parameter estimates $\hat{\theta}$ change over time based on the Regressor $Y$, the error $r$, and a learning rate matrix $\Gamma$:
-$$ \dot{\hat{\theta}} = \Gamma Y^T r $$
+To make the modular control law work, two differential equations must be solved simultaneously alongside the physical simulation:
+1. **The Parameter Update ($\dot{\hat{\theta}}$)**: Gradient descent to learn the unknown parameters based on the error $r$.
+   $$ \dot{\hat{\theta}} = \Gamma Y_s^T r $$
+2. **The Regressor Filter ($\dot{Y}_f$)**: A low-pass filter applied to the regression matrix to smooth out high-frequency mathematical noise during parameter updates, governed by bandwidth $\beta$.
+   $$ \dot{Y}_f = \beta(Y_s - Y_f) $$
 
 ### The Code
-To run this continuous differential equation on a computer, we use Euler integration (multiplying the derivative by the time-step `dt` and accumulating it). 
-*   `Gamma` is a 3x3 diagonal matrix for tuning the learning rates individually.
-*   `current_Y.transpose()` turns the row vector back into a column vector so the matrix dimensions align perfectly.
-
+We use Euler integration (multiplying the derivatives by the time-step `dt`) to step both equations forward in time:
 ```cpp
 void update_parameters(double dt) override {
-    // Modular Update Law Vectorized: theta_dot = Gamma * Y^T * r
-    theta_hat += Gamma * current_Y.transpose() * current_r * dt;
+    // 1. Modular Update Law
+    Eigen::Vector3d theta_dot = Gamma * current_Y.transpose() * current_r;
+    theta_hat += theta_dot * dt;
+    
+    // 2. Update low-pass filtered regression matrix (Y_f)
+    Eigen::RowVector3d Y_f_dot = beta * (current_Y - Y_f);
+    Y_f += Y_f_dot * dt;
 }
 ```

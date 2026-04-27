@@ -36,13 +36,18 @@ private:
     Eigen::Matrix3d Gamma;     // Adaptation gain matrix [gamma_M,0,0; 0, gamma_C, 0; 0, 0, gamma_D]
     double K, alpha;           // Control gains
     
+    // Variables for Modular/Robust Control (Equation 12)
+    Eigen::RowVector3d Y_f;    // Low-pass filtered regressor
+    double beta;               // Filter bandwidth
+    double k_n;                // Nonlinear damping gain
+    
     // Storing temporary states for the update_parameters step
     double current_r;
     Eigen::RowVector3d current_Y; // Regression row vector Y = [x_r_ddot, x_r_dot, 1] for the current time step
 
 public:
     AdaptiveModController(double M0, double C0, double D0) 
-        : K(10.0), alpha(5.0) {
+        : K(10.0), alpha(5.0), beta(10.0), k_n(1.0) { // Added robust parameters
         
         // Initialize parameter vector
         theta_hat << M0, C0, D0;
@@ -50,6 +55,9 @@ public:
         // Initialize diagonal adaptation gain matrix
         Gamma = Eigen::Matrix3d::Zero();
         Gamma.diagonal() << 2.0, 2.0, 2.0;  // Gains for M, C, D respectively
+        
+        // Initialize Filtered Regressor to zero
+        Y_f = Eigen::RowVector3d::Zero();
     }
 
     double get_control(double x, double x_dot, double x_d, double x_d_dot, double x_d_ddot) override {
@@ -64,14 +72,32 @@ public:
         // Regression vector (Y)
         current_Y << x_r_ddot, x_r_dot, 1.0;
         
-        // Control Law (Vectorized): u = Y * theta_hat + K * r
-        double u = (current_Y * theta_hat).value() + (K * current_r);
-        return u; // u is the control input to the plant, and it is a scalar
+        // Compute current theta_dot (from baseline update law)
+        Eigen::Vector3d theta_dot = Gamma * current_Y.transpose() * current_r;
+        double M_hat_dot = theta_dot(0); // V_m_hat is 0 in 1D
+        
+        // Equation 12: Robust Modular Control Law
+        double term1 = K * current_r;
+        double term2 = (current_Y * theta_hat).value();
+        double term3 = (1.0 / beta) * (Y_f * theta_dot).value();
+        double term4 = M_hat_dot * current_r;                                     // (M_hat_dot - V_m_hat) * r
+        double term5 = k_n * current_Y.squaredNorm() * current_r;                 // k_n * ||Y_s||^2 * r
+        double term6 = k_n * std::pow(term3, 2) * current_r;                      // k_n * ||1/beta * Y_f * theta_dot||^2 * r
+        double term7 = k_n * std::pow(M_hat_dot * current_r, 2) * current_r;      // k_n * ||(M_hat_dot - 0)*r||^2 * r
+        
+        double u = term1 + term2 + term3 + term4 + term5 + term6 + term7;
+        return u; // Scalar output
     }
 
     void update_parameters(double dt) override {
-        // Modular Update Law Vectorized: theta_dot = Gamma * Y^T * r
-        theta_hat += Gamma * current_Y.transpose() * current_r * dt;
+        // Modular Update Law Vectorized: theta_dot = Gamma * Y_s^T * r
+        Eigen::Vector3d theta_dot = Gamma * current_Y.transpose() * current_r;
+        theta_hat += theta_dot * dt;
+        
+        // Update low-pass filtered regression matrix (Y_f)
+        // filter dynamics: Y_f_dot = beta * (Y_s - Y_f)
+        Eigen::RowVector3d Y_f_dot = beta * (current_Y - Y_f);
+        Y_f += Y_f_dot * dt;
     }
 };
 
